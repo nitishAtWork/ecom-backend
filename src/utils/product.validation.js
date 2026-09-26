@@ -172,11 +172,78 @@ const createProductSchema = z.strictObject({
 |--------------------------------------------------------------------------
 */
 
-const updateProductSchema = z.strictObject({
+const existingImagesSchema = z.preprocess(
+    (value) => {
+        if (value === undefined) {
+            return undefined;
+        }
 
+        /*
+         * Frontend can send JSON:
+         *
+         * ["image1.jpg", "image2.jpg"]
+         *
+         * or a single value.
+         */
+        if (typeof value === "string") {
+            try {
+                const parsed = JSON.parse(value);
+
+                if (Array.isArray(parsed)) {
+                    return parsed;
+                }
+            } catch {
+                /*
+                 * If it is not JSON, treat it as
+                 * a single image path.
+                 */
+                return [value];
+            }
+        }
+
+        if (Array.isArray(value)) {
+            return value;
+        }
+
+        return value;
+    },
+    z
+        .array(
+            z.string().trim().min(1)
+        )
+        .optional()
+);
+
+const imagePathsSchema = z.preprocess(
+    (value) => {
+        if (value === undefined) {
+            return undefined;
+        }
+
+        if (typeof value === "string") {
+            try {
+                const parsed = JSON.parse(value);
+
+                if (Array.isArray(parsed)) {
+                    return parsed;
+                }
+            } catch {
+                return [value];
+            }
+        }
+
+        return value;
+    },
+    z
+        .array(
+            z.string().trim().min(1)
+        )
+        .optional()
+);
+
+const updateProductSchema = z.strictObject({
     body: z
         .strictObject({
-
             name: z
                 .string()
                 .trim()
@@ -260,23 +327,19 @@ const updateProductSchema = z.strictObject({
                     .optional(),
 
             /*
-             * File fields
-             *
-             * Actual files are handled by multer.
+             * Existing additional images that
+             * should remain.
              */
-            img: fileField,
+            existingImages:
+                existingImagesSchema,
 
-            images: fileField,
-        })
-
-        .refine(
-            (data) =>
-                Object.keys(data).length > 0,
-            {
-                message:
-                    "At least one field is required.",
-            }
-        ),
+            /*
+         * Existing additional images
+         * that should be removed.
+         */
+            removeImages:
+                imagePathsSchema,
+        }),
 
     params: z.strictObject({
         id: objectIdSchema,

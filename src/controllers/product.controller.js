@@ -1,6 +1,7 @@
 const {
     createProduct: createProductService,
     getProducts: getProductsService,
+    getProductsFrontend: getProductsFrontendService,
     getProductBySlug:
     getProductBySlugService,
     getProductById:
@@ -29,26 +30,73 @@ const createProduct = async (
     next
 ) => {
     try {
+
+         console.log(
+            "========== PRODUCT CREATE =========="
+        );
+
+        console.log(
+            "REQ.BODY:",
+            req.body
+        );
+
+        console.log(
+            "REQ.FILES:",
+            req.files
+        );
+
+        console.log(
+            "IMG:",
+            req.files?.img
+        );
+
+        console.log(
+            "IMAGES:",
+            req.files?.images
+        );
+
+        /*
+         * Copy normal form fields only.
+         */
         const productData = {
             ...req.body,
         };
 
         /*
-         * Main image
+         * IMPORTANT:
+         *
+         * img and images are uploaded files.
+         * Never allow their values from req.body
+         * to reach MongoDB.
+         */
+        delete productData.img;
+        delete productData.images;
+
+        /*
+         * --------------------------------------------------
+         * MAIN IMAGE
+         * --------------------------------------------------
          */
         if (
             req.files?.img &&
+            Array.isArray(req.files.img) &&
             req.files.img.length > 0
         ) {
+            const file =
+                req.files.img[0];
+
             productData.img =
-                `/uploads/products/${req.files.img[0].filename}`;
+                `/uploads/products/${file.filename}`;
         }
 
         /*
-         * Additional images
+         * --------------------------------------------------
+         * ADDITIONAL IMAGES
+         * --------------------------------------------------
          */
         if (
             req.files?.images &&
+            Array.isArray(req.files.images) &&
             req.files.images.length > 0
         ) {
             productData.images =
@@ -58,6 +106,11 @@ const createProduct = async (
                 );
         }
 
+        /*
+         * --------------------------------------------------
+         * CREATE PRODUCT
+         * --------------------------------------------------
+         */
         const product =
             await createProductService(
                 productData
@@ -70,6 +123,30 @@ const createProduct = async (
             data: {
                 product,
             },
+        });
+
+    } catch (error) {
+        next(error);
+    }
+};
+
+/*
+ * GET /api/products-frontend
+ */
+const getProductsFrontend = async (
+    req,
+    res,
+    next
+) => {
+    try {
+        const result =
+            await getProductsFrontendService(
+                req.query
+            );
+
+        return res.status(200).json({
+            success: true,
+            data: result,
         });
     } catch (error) {
         next(error);
@@ -153,52 +230,27 @@ const getProductById = async (
 /*
  * PATCH /api/products/:id
  */
+/*
+ * PATCH /api/products/:id
+ */
 const updateProduct = async (
     req,
     res,
     next
 ) => {
+    const newUploadedFiles = [];
+
     try {
         /*
-         * Copy normal body fields.
-         *
-         * img/images are file fields and must NOT come
-         * from req.body.
-         */
-        const updateData = {
-            ...req.body,
-        };
-
-        /*
-         * Remove file fields if they somehow exist
-         * inside req.body.
-         */
-        delete updateData.img;
-        delete updateData.images;
-
-        /*
-         * Keep track of newly uploaded files.
-         *
-         * If MongoDB update fails, these files must
-         * be deleted because they are not referenced
-         * by the database.
-         */
-        const newUploadedImages = [];
-
-        /*
-         * Get existing product BEFORE updating it.
+         * --------------------------------------------------
+         * GET EXISTING PRODUCT
+         * --------------------------------------------------
          */
         const existingProductResult =
             await getProductByIdService(
                 req.params.id
             );
 
-        /*
-         * Depending on your service implementation,
-         * it may return the product directly or:
-         *
-         * { product }
-         */
         const existingProduct =
             existingProductResult?.product ||
             existingProductResult;
@@ -211,13 +263,102 @@ const updateProduct = async (
         }
 
         /*
-         * Track whether new images were uploaded.
-         *
-         * This is important because we only delete
-         * old files when they are actually replaced.
+         * --------------------------------------------------
+         * NORMAL BODY DATA
+         * --------------------------------------------------
          */
-        let newMainImageUploaded = false;
-        let newAdditionalImagesUploaded = false;
+        const updateData = {
+            ...req.body,
+        };
+
+        /*
+         * Files are handled by multer.
+         */
+        delete updateData.img;
+        delete updateData.images;
+
+        /*
+         * --------------------------------------------------
+         * REMOVE IMAGES
+         * --------------------------------------------------
+         */
+        let removeImages = [];
+
+        if (
+            req.body.removeImages !==
+            undefined
+        ) {
+            removeImages =
+                req.body.removeImages;
+
+            /*
+             * Multipart/form-data sends this
+             * as a string.
+             */
+            if (
+                typeof removeImages ===
+                "string"
+            ) {
+                try {
+                    removeImages =
+                        JSON.parse(
+                            removeImages
+                        );
+                } catch {
+                    removeImages = [
+                        removeImages,
+                    ];
+                }
+            }
+
+            if (
+                !Array.isArray(
+                    removeImages
+                )
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "removeImages must be an array.",
+                });
+            }
+
+            removeImages =
+                removeImages.filter(
+                    (image) =>
+                        typeof image ===
+                            "string" &&
+                        image.trim() !== ""
+                );
+        }
+
+        /*
+         * Don't save removeImages in MongoDB.
+         */
+        delete updateData.removeImages;
+
+        /*
+         * --------------------------------------------------
+         * EXISTING IMAGES
+         * --------------------------------------------------
+         */
+        const oldImages =
+            Array.isArray(
+                existingProduct.images
+            )
+                ? existingProduct.images
+                : [];
+
+        /*
+         * Images remaining after removal.
+         */
+        const remainingImages =
+            oldImages.filter(
+                (image) =>
+                    !removeImages.includes(
+                        image
+                    )
+            );
 
         /*
          * --------------------------------------------------
@@ -226,7 +367,9 @@ const updateProduct = async (
          */
         if (
             req.files?.img &&
-            Array.isArray(req.files.img) &&
+            Array.isArray(
+                req.files.img
+            ) &&
             req.files.img.length > 0
         ) {
             const uploadedFile =
@@ -238,11 +381,9 @@ const updateProduct = async (
             updateData.img =
                 newMainImage;
 
-            newUploadedImages.push(
+            newUploadedFiles.push(
                 newMainImage
             );
-
-            newMainImageUploaded = true;
         }
 
         /*
@@ -250,25 +391,43 @@ const updateProduct = async (
          * NEW ADDITIONAL IMAGES
          * --------------------------------------------------
          */
+        let newImages = [];
+
         if (
             req.files?.images &&
-            Array.isArray(req.files.images) &&
+            Array.isArray(
+                req.files.images
+            ) &&
             req.files.images.length > 0
         ) {
-            const newImages =
+            newImages =
                 req.files.images.map(
                     (file) =>
                         `/uploads/products/${file.filename}`
                 );
 
-            updateData.images =
-                newImages;
-
-            newUploadedImages.push(
+            newUploadedFiles.push(
                 ...newImages
             );
+        }
 
-            newAdditionalImagesUploaded = true;
+        /*
+         * --------------------------------------------------
+         * FINAL ADDITIONAL IMAGE LIST
+         * --------------------------------------------------
+         *
+         * Remaining old images
+         * +
+         * newly uploaded images
+         */
+        if (
+            removeImages.length > 0 ||
+            newImages.length > 0
+        ) {
+            updateData.images = [
+                ...remainingImages,
+                ...newImages,
+            ];
         }
 
         /*
@@ -276,86 +435,80 @@ const updateProduct = async (
          * UPDATE DATABASE
          * --------------------------------------------------
          */
-        try {
-            const product =
-                await updateProductService(
-                    req.params.id,
-                    updateData
-                );
+        const product =
+            await updateProductService(
+                req.params.id,
+                updateData
+            );
 
-            /*
-             * --------------------------------------------------
-             * DELETE OLD MAIN IMAGE
-             * --------------------------------------------------
-             *
-             * Only delete it if a new main image was uploaded.
-             */
-            if (
-                newMainImageUploaded &&
-                existingProduct.img &&
-                existingProduct.img !== updateData.img
-            ) {
-                await deleteProductImage(
-                    existingProduct.img
-                );
-            }
-
-            /*
-             * --------------------------------------------------
-             * DELETE OLD ADDITIONAL IMAGES
-             * --------------------------------------------------
-             *
-             * Only delete old images when new images
-             * were uploaded.
-             */
-            if (
-                newAdditionalImagesUploaded &&
-                Array.isArray(
-                    existingProduct.images
-                ) &&
-                existingProduct.images.length > 0
-            ) {
-                await deleteProductImages(
-                    existingProduct.images
-                );
-            }
-
-            /*
-             * --------------------------------------------------
-             * SUCCESS
-             * --------------------------------------------------
-             */
-            return res.status(200).json({
-                success: true,
-                message:
-                    "Product updated successfully.",
-                data: {
-                    product,
-                },
-            });
-
-        } catch (error) {
-
-            /*
-             * --------------------------------------------------
-             * DATABASE UPDATE FAILED
-             * --------------------------------------------------
-             *
-             * The newly uploaded files are not referenced
-             * by MongoDB, so remove them.
-             */
-            if (
-                newUploadedImages.length > 0
-            ) {
-                await deleteProductImages(
-                    newUploadedImages
-                );
-            }
-
-            throw error;
+        /*
+         * --------------------------------------------------
+         * DELETE OLD MAIN IMAGE
+         * --------------------------------------------------
+         */
+        if (
+            req.files?.img?.length >
+                0 &&
+            existingProduct.img &&
+            existingProduct.img !==
+                updateData.img
+        ) {
+            await deleteProductImage(
+                existingProduct.img
+            );
         }
 
+        /*
+         * --------------------------------------------------
+         * DELETE REMOVED ADDITIONAL IMAGES
+         * --------------------------------------------------
+         */
+        if (
+            removeImages.length > 0
+        ) {
+            await deleteProductImages(
+                removeImages
+            );
+        }
+
+        /*
+         * --------------------------------------------------
+         * SUCCESS
+         * --------------------------------------------------
+         */
+        return res.status(200).json({
+            success: true,
+            message:
+                "Product updated successfully.",
+            data: {
+                product,
+            },
+        });
+
     } catch (error) {
+        /*
+         * --------------------------------------------------
+         * CLEANUP NEW FILES IF UPDATE FAILED
+         * --------------------------------------------------
+         */
+        if (
+            newUploadedFiles.length >
+            0
+        ) {
+            try {
+                await deleteProductImages(
+                    newUploadedFiles
+                );
+            } catch (
+                cleanupError
+            ) {
+                console.error(
+                    "Failed to cleanup uploaded files:",
+                    cleanupError
+                );
+            }
+        }
+
         next(error);
     }
 };
@@ -420,6 +573,7 @@ const deactivateProductController = async (
 module.exports = {
     createProduct,
     getProducts,
+    getProductsFrontend,
     getProductBySlug,
     updateProduct,
     deleteProduct,

@@ -3,6 +3,7 @@ const express = require("express");
 const {
     createProduct,
     getProducts,
+    getProductsFrontend,
     getProductBySlug,
     updateProduct,
     deleteProduct,
@@ -24,6 +25,13 @@ const {
 } = require("../middleware/validate.middleware");
 
 const {
+    createUpload,
+} = require("../config/multer");
+
+const productUpload =
+    createUpload("products");
+
+const {
     createProductSchema,
     updateProductSchema,
     getProductBySlugSchema,
@@ -31,7 +39,7 @@ const {
     listProductsSchema,
 } = require("../utils/product.validation");
 
-const upload = require("../config/multer");
+// const upload = require("../config/multer");
 
 const router = express.Router();
 
@@ -40,8 +48,22 @@ const router = express.Router();
  */
 router.get(
     "/",
+    authenticate,
+    authorize(
+        "ADMIN",
+        "SUPERADMIN"
+    ),
     // validate(listProductsSchema),
     getProducts
+);
+
+/*
+ * Public product listing
+ */
+router.get(
+    "/frontend",
+    // validate(listProductsSchema),
+    getProductsFrontend
 );
 
 /*
@@ -59,6 +81,11 @@ router.get(
 router.get(
     "/by-id/:id",
     // validate(getProductByIdSchema),
+    authenticate,
+    authorize(
+        "ADMIN",
+        "SUPERADMIN"
+    ),
     getProductById
 );
 
@@ -72,7 +99,7 @@ router.post(
         "ADMIN",
         "SUPERADMIN"
     ),
-    upload.fields([
+    productUpload.fields([
         {
             name: "img",
             maxCount: 1,
@@ -96,7 +123,7 @@ router.patch(
         "ADMIN",
         "SUPERADMIN"
     ),
-    upload.fields([
+    productUpload.fields([
         {
             name: "img",
             maxCount: 1,

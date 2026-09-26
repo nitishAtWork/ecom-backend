@@ -349,6 +349,171 @@ const getProducts = async ({
 };
 
 /*
+ * Get products for frontend
+ */
+const getProductsFrontend = async ({
+    page = 1,
+    limit = 20,
+    search,
+    sort = "newest",
+    featured,
+    minPrice,
+    maxPrice,
+    isActive,
+}) => {
+    const filter = {isActive: true};
+
+    /*
+     * Search
+     */
+    if (search?.trim()) {
+        filter.$or = [
+            {
+                name: {
+                    $regex: search.trim(),
+                    $options: "i",
+                },
+            },
+            {
+                sku: {
+                    $regex: search.trim(),
+                    $options: "i",
+                },
+            },
+            {
+                brand: {
+                    $regex: search.trim(),
+                    $options: "i",
+                },
+            },
+        ];
+    }
+
+    /*
+     * Active / Inactive filter
+     */
+    if (isActive !== undefined) {
+        filter.isActive =
+            isActive === true ||
+            isActive === "true";
+    }
+
+    /*
+     * Featured products
+     */
+    if (featured !== undefined) {
+        filter.isFeatured =
+            featured === "true";
+    }
+
+    /*
+     * Price filter
+     */
+    if (
+        minPrice !== undefined ||
+        maxPrice !== undefined
+    ) {
+        filter.price = {};
+
+        if (minPrice !== undefined) {
+            filter.price.$gte = minPrice;
+        }
+
+        if (maxPrice !== undefined) {
+            filter.price.$lte = maxPrice;
+        }
+    }
+
+    /*
+     * Sorting
+     */
+    let sortOption = {
+        createdAt: -1,
+    };
+
+    switch (sort) {
+        case "oldest":
+            sortOption = {
+                createdAt: 1,
+            };
+            break;
+
+        case "price_asc":
+            sortOption = {
+                price: 1,
+                createdAt: -1,
+            };
+            break;
+
+        case "price_desc":
+            sortOption = {
+                price: -1,
+                createdAt: -1,
+            };
+            break;
+
+        case "name_asc":
+            sortOption = {
+                name: 1,
+            };
+            break;
+
+        case "name_desc":
+            sortOption = {
+                name: -1,
+            };
+            break;
+
+        case "newest":
+        default:
+            sortOption = {
+                createdAt: -1,
+            };
+    }
+
+    const skip =
+        (page - 1) * limit;
+
+    const [
+        products,
+        total,
+    ] = await Promise.all([
+        Product.find(filter)
+            .sort(sortOption)
+            .skip(skip)
+            .limit(limit)
+            .lean(),
+
+        Product.countDocuments(filter),
+    ]);
+
+    /*
+  * Convert image paths into complete URLs.
+  */
+    const preparedProducts =
+        products.map(
+            prepareProduct
+        );
+
+    const totalPages =
+        Math.ceil(total / limit);
+
+    return {
+        products: preparedProducts,
+        pagination: {
+            page,
+            limit,
+            total,
+            totalPages,
+            hasNextPage:
+                page < totalPages,
+            hasPreviousPage:
+                page > 1,
+        },
+    };
+};
+
+/*
  * Get product by slug
  */
 const getProductBySlug = async (slug) => {
@@ -580,6 +745,7 @@ const toggleActiveStatus = async (id) => {
 module.exports = {
     createProduct,
     getProducts,
+    getProductsFrontend,
     getProductBySlug,
     getProductById,
     updateProduct,

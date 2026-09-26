@@ -6,7 +6,12 @@ const {
     getWebsiteInfo,
 } = require("../controllers/website.controller.js");
 
-const upload = require("../config/multer.js");
+const {
+    createUpload,
+} = require("../config/multer");
+
+const websiteUpload =
+    createUpload("website");
 
 const router = express.Router();
 
@@ -14,7 +19,7 @@ router.get("/", getWebsiteInfo);
 
 router.post(
     "/",
-    upload.fields([
+    websiteUpload.fields([
         {
             name: "logo",
             maxCount: 1,
@@ -29,7 +34,7 @@ router.post(
 
 router.put(
     "/",
-    upload.fields([
+    websiteUpload.fields([
         {
             name: "logo",
             maxCount: 1,

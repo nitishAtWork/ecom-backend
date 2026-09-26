@@ -36,18 +36,31 @@ const updateCartItemSchema = z.strictObject({
     query: z.strictObject({}),
 });
 
+// const removeCartItemSchema = z.strictObject({
+//     body: z.strictObject({}),
+
+//     params: z.strictObject({
+//         productId: objectIdSchema,
+//     }),
+
+//     query: z.strictObject({}),
+// });
+
 const removeCartItemSchema = z.strictObject({
-    body: z.strictObject({}),
+    body: z.strictObject({}).optional(),
 
     params: z.strictObject({
-        productId: objectIdSchema,
+        productId: z.string().regex(
+            /^[0-9a-fA-F]{24}$/,
+            "Invalid product ID."
+        ),
     }),
 
     query: z.strictObject({}),
 });
 
 const emptyCartSchema = z.strictObject({
-    body: z.strictObject({}),
+    body: z.strictObject({}).optional(),
 
     params: z.strictObject({}),
 

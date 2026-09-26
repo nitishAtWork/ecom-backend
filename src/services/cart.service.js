@@ -1,6 +1,56 @@
 const Cart = require("../models/Cart");
 const Product = require("../models/Product");
 
+
+/*
+ * Get complete cart with:
+ *
+ * - current product information
+ * - current prices
+ * - stock validation
+ * - subtotal
+ * - item count
+ */
+const getCartWithTotals = async ({
+    cartId,
+    userId,
+}) => {
+    let cart = await findCart({
+        cartId,
+        userId,
+    });
+
+    /*
+     * Create cart when it doesn't exist.
+     */
+    if (!cart) {
+        cart = await Cart.create({
+            cartId: userId ? null : cartId,
+            user: userId || null,
+            items: [],
+        });
+    }
+
+    /*
+     * Validate stock before returning.
+     */
+    await validateCartStock(cart);
+
+    /*
+     * Reload with current product information.
+     */
+    const populatedCart =
+        await populateCart(cart);
+
+    const totals =
+        calculateCartTotals(populatedCart);
+
+    return {
+        cart: populatedCart,
+        totals,
+    };
+};
+
 const getCartById = async (cartId) => {
     return Cart.findOne({
         cartId,
@@ -33,20 +83,44 @@ const getOrCreateGuestCart = async (cartId) => {
 
 /*
  * Add product to cart
+ *
+ * Works for:
+ * - Guest users
+ * - Logged-in users
  */
 const addToCart = async ({
     cartId,
+    userId = null,
     productId,
     quantity,
 }) => {
-    const product = await Product.findOne({
-        _id: productId,
-        isActive: true,
-    }).lean();
+    console.log(
+        "ADD TO CART SERVICE:",
+        {
+            cartId,
+            userId,
+            productId,
+            quantity,
+            productIdType:
+                typeof productId,
+            quantityType:
+                typeof quantity,
+        }
+    );
+
+    /*
+     * ==========================================
+     * Validate product
+     * ==========================================
+     */
+    const product =
+        await Product.findById(
+            productId
+        ).lean();
 
     if (!product) {
         const error = new Error(
-            "Product is not available."
+            "Product not found."
         );
 
         error.statusCode = 404;
@@ -54,6 +128,24 @@ const addToCart = async ({
         throw error;
     }
 
+    /*
+     * Product exists but is inactive.
+     */
+    if (product.isActive !== true) {
+        const error = new Error(
+            "Product is currently unavailable."
+        );
+
+        error.statusCode = 400;
+
+        throw error;
+    }
+
+    /*
+     * ==========================================
+     * Validate stock
+     * ==========================================
+     */
     if (product.stock <= 0) {
         const error = new Error(
             "Product is out of stock."
@@ -64,18 +156,52 @@ const addToCart = async ({
         throw error;
     }
 
-    let cart = await Cart.findOne({
-        cartId,
-    });
+    /*
+     * ==========================================
+     * Find cart
+     * ==========================================
+     */
+    let cart;
 
-    if (!cart) {
-        cart = await Cart.create({
+    if (userId) {
+        /*
+         * Logged-in user's cart
+         */
+        cart = await Cart.findOne({
+            user: userId,
+        });
+    } else {
+        /*
+         * Guest cart
+         */
+        cart = await Cart.findOne({
             cartId,
             user: null,
+        });
+    }
+
+    /*
+     * ==========================================
+     * Create cart if it doesn't exist
+     * ==========================================
+     */
+    if (!cart) {
+        cart = await Cart.create({
+            cartId: userId
+                ? null
+                : cartId,
+
+            user: userId || null,
+
             items: [],
         });
     }
 
+    /*
+     * ==========================================
+     * Check existing item
+     * ==========================================
+     */
     const existingItemIndex =
         cart.items.findIndex(
             (item) =>
@@ -83,14 +209,24 @@ const addToCart = async ({
                 productId.toString()
         );
 
+    /*
+     * ==========================================
+     * Existing product
+     * ==========================================
+     */
     if (existingItemIndex !== -1) {
         const existingQuantity =
-            cart.items[existingItemIndex].quantity;
+            cart.items[
+                existingItemIndex
+            ].quantity;
 
         const newQuantity =
             existingQuantity + quantity;
 
-        if (newQuantity > product.stock) {
+        if (
+            newQuantity >
+            product.stock
+        ) {
             const error = new Error(
                 `Only ${product.stock} item(s) available in stock.`
             );
@@ -100,10 +236,19 @@ const addToCart = async ({
             throw error;
         }
 
-        cart.items[existingItemIndex].quantity =
-            newQuantity;
+        cart.items[
+            existingItemIndex
+        ].quantity = newQuantity;
     } else {
-        if (quantity > product.stock) {
+        /*
+         * ==========================================
+         * New product
+         * ==========================================
+         */
+        if (
+            quantity >
+            product.stock
+        ) {
             const error = new Error(
                 `Only ${product.stock} item(s) available in stock.`
             );
@@ -119,14 +264,22 @@ const addToCart = async ({
         });
     }
 
+    /*
+     * ==========================================
+     * Save cart
+     * ==========================================
+     */
     await cart.save();
 
+    /*
+     * ==========================================
+     * Return cart with totals
+     * ==========================================
+     */
     return getCartWithTotals({
         cartId,
         userId,
     });
-
-    // return getCartById(cartId);
 };
 
 /*
@@ -208,7 +361,7 @@ const updateCartItem = async ({
 
     return getCartWithTotals({
         cartId,
-        userId,
+        // userId,
     });
 
     // return getCartById(cartId);
@@ -259,7 +412,7 @@ const clearCart = async (cartId) => {
     return getCartById(cartId);
 };
 
-const mergeGuestCartIntoUserCart = async ({
+const mergeGuestCartIntoUserCartHOldeeddddddddddddddd = async ({
     cartId,
     userId,
 }) => {
@@ -378,6 +531,72 @@ const mergeGuestCartIntoUserCart = async ({
     });
 
     // return getUserCart(userId);
+};
+
+const mergeGuestCartIntoUserCart = async ({
+    cartId,
+    userId,
+}) => {
+    if (!userId) {
+        throw new Error("User ID is required.");
+    }
+
+    const userCart = await getUserCart(userId);
+
+    if (!cartId) {
+        return getCartWithTotals({
+            userId,
+        });
+    }
+
+    const guestCart = await getOrCreateGuestCart(
+        cartId
+    );
+
+    if (
+        !guestCart ||
+        !guestCart.items ||
+        guestCart.items.length === 0
+    ) {
+        return getCartWithTotals({
+            userId,
+        });
+    }
+
+    /*
+     * Add guest items into user cart.
+     */
+    for (const guestItem of guestCart.items) {
+        const existingItem =
+            userCart.items.find(
+                (item) =>
+                    item.product.toString() ===
+                    guestItem.product.toString()
+            );
+
+        if (existingItem) {
+            existingItem.quantity +=
+                guestItem.quantity;
+        } else {
+            userCart.items.push({
+                product: guestItem.product,
+                quantity: guestItem.quantity,
+            });
+        }
+    }
+
+    await userCart.save();
+
+    /*
+     * Guest cart is no longer needed.
+     */
+    await Cart.deleteOne({
+        _id: guestCart._id,
+    });
+
+    return getCartWithTotals({
+        userId,
+    });
 };
 
 const getUserCart = async (userId) => {
@@ -527,55 +746,6 @@ const validateCartStock = async (cart) => {
     }
 
     return changed;
-};
-
-/*
- * Get complete cart with:
- *
- * - current product information
- * - current prices
- * - stock validation
- * - subtotal
- * - item count
- */
-const getCartWithTotals = async ({
-    cartId,
-    userId,
-}) => {
-    let cart = await findCart({
-        cartId,
-        userId,
-    });
-
-    /*
-     * Create cart when it doesn't exist.
-     */
-    if (!cart) {
-        cart = await Cart.create({
-            cartId: userId ? null : cartId,
-            user: userId || null,
-            items: [],
-        });
-    }
-
-    /*
-     * Validate stock before returning.
-     */
-    await validateCartStock(cart);
-
-    /*
-     * Reload with current product information.
-     */
-    const populatedCart =
-        await populateCart(cart);
-
-    const totals =
-        calculateCartTotals(populatedCart);
-
-    return {
-        cart: populatedCart,
-        totals,
-    };
 };
 
 

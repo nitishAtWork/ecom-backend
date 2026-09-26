@@ -1,12 +1,10 @@
 const {
-    getOrCreateGuestCart,
-    getUserCart,
+    getCartWithTotals,
     addToCart: addToCartService,
     updateCartItem: updateCartItemService,
     removeFromCart,
     clearCart: clearCartService,
     mergeGuestCartIntoUserCart,
-    getCartWithTotals,
 } = require("../services/cart.service");
 
 /*
@@ -21,7 +19,8 @@ const getCart = async (
         const result =
             await getCartWithTotals({
                 cartId: req.cartId,
-                userId: req.user?._id,
+                userId:
+                    req.user?._id || null,
             });
 
         return res.status(200).json({
@@ -33,107 +32,53 @@ const getCart = async (
     }
 };
 
-const addToCart = async ({
-    cartId,
-    userId,
-    productId,
-    quantity,
-}) => {
-    const product = await Product.findOne({
-        _id: productId,
-        isActive: true,
-    }).lean();
-
-    if (!product) {
-        const error = new Error(
-            "Product is not available."
-        );
-
-        error.statusCode = 404;
-
-        throw error;
-    }
-
-    if (product.stock <= 0) {
-        const error = new Error(
-            "Product is out of stock."
-        );
-
-        error.statusCode = 400;
-
-        throw error;
-    }
-
-    let cart = await findCart({
-        cartId,
-        userId,
-    });
-
-    if (!cart) {
-        cart = await Cart.create({
-            cartId: userId
-                ? null
-                : cartId,
-
-            user: userId || null,
-
-            items: [],
-        });
-    }
-
-    const existingItemIndex =
-        cart.items.findIndex(
-            (item) =>
-                item.product.toString() ===
-                productId.toString()
-        );
-
-    if (existingItemIndex !== -1) {
-        const existingQuantity =
-            cart.items[
-                existingItemIndex
-            ].quantity;
-
-        const newQuantity =
-            existingQuantity + quantity;
-
-        if (newQuantity > product.stock) {
-            const error = new Error(
-                `Only ${product.stock} item(s) available in stock.`
-            );
-
-            error.statusCode = 400;
-
-            throw error;
-        }
-
-        cart.items[
-            existingItemIndex
-        ].quantity = newQuantity;
-    } else {
-        if (quantity > product.stock) {
-            const error = new Error(
-                `Only ${product.stock} item(s) available in stock.`
-            );
-
-            error.statusCode = 400;
-
-            throw error;
-        }
-
-        cart.items.push({
-            product: product._id,
+/*
+ * POST /api/cart/items
+ */
+const addToCart = async (
+    req,
+    res,
+    next
+) => {
+    try {
+        const {
+            productId,
             quantity,
+        } = req.body;
+
+        console.log(
+            "ADD TO CART CONTROLLER:",
+            {
+                body: req.body,
+                productId,
+                quantity,
+                cartId: req.cartId,
+                userId:
+                    req.user?._id || null,
+            }
+        );
+
+        const result =
+            await addToCartService({
+                cartId: req.cartId,
+
+                userId:
+                    req.user?._id || null,
+
+                productId,
+
+                quantity,
+            });
+
+        return res.status(200).json({
+            success: true,
+            message:
+                "Product added to cart successfully.",
+            data: result,
         });
+    } catch (error) {
+        next(error);
     }
-
-    await cart.save();
-
-    if (userId) {
-        return getUserCart(userId);
-    }
-
-    return getCartById(cartId);
 };
 
 /*
@@ -164,9 +109,7 @@ const updateCartItem = async (
             success: true,
             message:
                 "Cart item updated successfully.",
-            data: {
-                cart,
-            },
+            data: cart,
         });
     } catch (error) {
         next(error);

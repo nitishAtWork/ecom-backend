@@ -1,5 +1,8 @@
 const Website = require("../models/Website");
-
+const BASE_URL = (
+    process.env.BASE_URL ||
+    ""
+).replace(/\/$/, "");
 const {
   deleteUploadedFile,
 } = require("../utils/file");
@@ -862,11 +865,11 @@ const getWebsiteInfo = async (req, res) => {
     }
 
     if (websiteInfo.logo) {
-      websiteInfo.logo = `${process.env.BASE_URL}uploads/website/${websiteInfo.logo}`;
+      websiteInfo.logo = `${BASE_URL}${websiteInfo.logo}`;
     }
 
     if (websiteInfo.favicon) {
-      websiteInfo.favicon = `${process.env.BASE_URL}uploads/website/${websiteInfo.favicon}`;
+      websiteInfo.favicon = `${BASE_URL}${websiteInfo.favicon}`;
     }
 
     // Do not expose sensitive/internal API ID
