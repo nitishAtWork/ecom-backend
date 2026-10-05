@@ -103,6 +103,8 @@ const updateCartItem = async (
                 cartId: req.cartId,
                 productId,
                 quantity,
+                userId:
+                    req.user?._id || null,
             });
 
         return res.status(200).json({
@@ -150,15 +152,15 @@ const removeCartItem = async (
                 cartId: req.cartId,
                 productId:
                     req.params.productId,
+                userId:
+                    req.user?._id || null,
             });
 
         return res.status(200).json({
             success: true,
             message:
                 "Product removed from cart.",
-            data: {
-                cart,
-            },
+            data: cart,
         });
     } catch (error) {
         next(error);
@@ -171,21 +173,22 @@ const removeCartItem = async (
 const clearCart = async (
     req,
     res,
-    next
+    next 
 ) => {
     try {
         const cart =
             await clearCartService(
-                req.cartId
+                {
+                    cartId: req.cartId,
+                    userId: req.user?._id || null,
+                }
             );
 
         return res.status(200).json({
             success: true,
             message:
                 "Cart cleared successfully.",
-            data: {
-                cart,
-            },
+           data: cart,
         });
     } catch (error) {
         next(error);
@@ -203,19 +206,51 @@ const mergeCart = async (
     next
 ) => {
     try {
+        const {
+            cartId,
+        } = req.body;
+
+        // console.log(
+        //     "========== MERGE CART =========="
+        // );
+
+        // console.log(
+        //     "BODY.CART_ID:",
+        //     cartId
+        // );
+
+        // console.log(
+        //     "REQ.CART_ID:",
+        //     req.cartId
+        // );
+
+        // console.log(
+        //     "REQ.USER_ID:",
+        //     req.user?._id
+        // );
+
+        // console.log(
+        //     "REQ.COOKIES:",
+        //     req.cookies
+        // );
+
+        // console.log(
+        //     "================================="
+        // );
+
         const cart =
             await mergeGuestCartIntoUserCart({
-                cartId: req.cartId,
-                userId: req.user._id,
+                cartId,
+
+                userId:
+                    req.user._id,
             });
 
         return res.status(200).json({
             success: true,
             message:
                 "Cart merged successfully.",
-            data: {
-                cart,
-            },
+            data: cart,
         });
     } catch (error) {
         next(error);

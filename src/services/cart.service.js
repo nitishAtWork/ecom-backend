@@ -287,13 +287,15 @@ const addToCart = async ({
  */
 const updateCartItem = async ({
     cartId,
+    userId,
     productId,
     quantity,
 }) => {
-    const product = await Product.findOne({
-        _id: productId,
-        isActive: true,
-    }).lean();
+    const product =
+        await Product.findOne({
+            _id: productId,
+            isActive: true,
+        }).lean();
 
     if (!product) {
         const error = new Error(
@@ -325,9 +327,20 @@ const updateCartItem = async ({
         throw error;
     }
 
-    const cart = await Cart.findOne({
-        cartId,
-    });
+    /*
+     * Find the correct cart.
+     *
+     * Logged-in user -> userId
+     * Guest -> cartId
+     */
+    const cart = userId
+        ? await Cart.findOne({
+              user: userId,
+          })
+        : await Cart.findOne({
+              cartId,
+              user: null,
+          });
 
     if (!cart) {
         const error = new Error(
@@ -360,11 +373,9 @@ const updateCartItem = async ({
     await cart.save();
 
     return getCartWithTotals({
-        cartId,
-        // userId,
+        cartId: userId ? null : cartId,
+        userId,
     });
-
-    // return getCartById(cartId);
 };
 
 /*
@@ -372,11 +383,17 @@ const updateCartItem = async ({
  */
 const removeFromCart = async ({
     cartId,
+    userId,
     productId,
 }) => {
-    const cart = await Cart.findOne({
-        cartId,
-    });
+    const cart = userId
+        ? await Cart.findOne({
+              user: userId,
+          })
+        : await Cart.findOne({
+              cartId,
+              user: null,
+          });
 
     if (!cart) {
         return null;
@@ -390,16 +407,27 @@ const removeFromCart = async ({
 
     await cart.save();
 
-    return getCartById(cartId);
+    return getCartWithTotals({
+        cartId: userId ? null : cartId,
+        userId,
+    });
 };
 
 /*
  * Clear entire cart
  */
-const clearCart = async (cartId) => {
-    const cart = await Cart.findOne({
-        cartId,
-    });
+const clearCart = async ({
+    cartId,
+    userId,
+}) => {
+    const cart = userId
+        ? await Cart.findOne({
+              user: userId,
+          })
+        : await Cart.findOne({
+              cartId,
+              user: null,
+          });
 
     if (!cart) {
         return null;
@@ -409,7 +437,10 @@ const clearCart = async (cartId) => {
 
     await cart.save();
 
-    return getCartById(cartId);
+    return getCartWithTotals({
+        cartId: userId ? null : cartId,
+        userId,
+    });
 };
 
 const mergeGuestCartIntoUserCartHOldeeddddddddddddddd = async ({
@@ -538,35 +569,78 @@ const mergeGuestCartIntoUserCart = async ({
     userId,
 }) => {
     if (!userId) {
-        throw new Error("User ID is required.");
+        throw new Error(
+            "User ID is required."
+        );
     }
 
-    const userCart = await getUserCart(userId);
-
+    /*
+     * No guest cart to merge.
+     */
     if (!cartId) {
         return getCartWithTotals({
             userId,
         });
     }
 
-    const guestCart = await getOrCreateGuestCart(
-        cartId
-    );
+    /*
+     * IMPORTANT:
+     * Find the existing guest cart.
+     *
+     * Do NOT use getOrCreateGuestCart()
+     * here because we don't want to create
+     * a new empty cart during merge.
+     */
+    const guestCart = await Cart.findOne({
+        cartId,
+        user: null,
+    });
 
-    if (
-        !guestCart ||
-        !guestCart.items ||
-        guestCart.items.length === 0
-    ) {
+    /*
+     * If the guest cart doesn't exist,
+     * simply return the user's cart.
+     */
+    if (!guestCart) {
         return getCartWithTotals({
             userId,
         });
     }
 
     /*
-     * Add guest items into user cart.
+     * Find/create user's cart.
+     */
+    let userCart = await Cart.findOne({
+        user: userId,
+    });
+
+    if (!userCart) {
+        userCart = await Cart.create({
+            user: userId,
+            cartId: null,
+            items: [],
+        });
+    }
+
+    /*
+     * Merge every guest item.
      */
     for (const guestItem of guestCart.items) {
+        const product = await Product.findOne({
+            _id: guestItem.product,
+            isActive: true,
+        }).lean();
+
+        /*
+         * Ignore deleted/inactive/out-of-stock
+         * products.
+         */
+        if (
+            !product ||
+            product.stock <= 0
+        ) {
+            continue;
+        }
+
         const existingItem =
             userCart.items.find(
                 (item) =>
@@ -575,12 +649,22 @@ const mergeGuestCartIntoUserCart = async ({
             );
 
         if (existingItem) {
-            existingItem.quantity +=
+            const combinedQuantity =
+                existingItem.quantity +
                 guestItem.quantity;
+
+            existingItem.quantity =
+                Math.min(
+                    combinedQuantity,
+                    product.stock
+                );
         } else {
             userCart.items.push({
-                product: guestItem.product,
-                quantity: guestItem.quantity,
+                product: product._id,
+                quantity: Math.min(
+                    guestItem.quantity,
+                    product.stock
+                ),
             });
         }
     }
@@ -594,6 +678,9 @@ const mergeGuestCartIntoUserCart = async ({
         _id: guestCart._id,
     });
 
+    /*
+     * Return authenticated user's cart.
+     */
     return getCartWithTotals({
         userId,
     });

@@ -21,12 +21,17 @@ const cartItemSchema = new mongoose.Schema(
 
 const cartSchema = new mongoose.Schema(
     {
+        // cartId: {
+        //     type: String,
+        //     unique: true,
+        //     sparse: true,
+        //     index: true,
+        //     default: null,
+        // },
         cartId: {
             type: String,
-            unique: true,
-            sparse: true,
-            index: true,
             default: null,
+            index: true,
         },
 
         user: {

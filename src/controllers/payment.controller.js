@@ -250,87 +250,49 @@ const processUroPayWebhook =
     };
 
 
-    const restoreOrderStockAndFailPayment =
-    async (
-        orderId,
-        paymentStatus
-    ) => {
-        const session =
-            await mongoose.startSession();
+const restoreOrderStockAndFailPayment = async (
+    orderId,
+    paymentStatus
+) => {
+    const order = await Order.findById(orderId);
 
-        try {
-            await session.withTransaction(
-                async () => {
-                    const order =
-                        await Order.findById(
-                            orderId
-                        ).session(session);
+    if (!order) {
+        return;
+    }
 
-                    if (!order) {
-                        return;
-                    }
+    // Already processed
+    if (
+        [
+            "PAID",
+            "FAILED",
+            "EXPIRED",
+            "CANCELLED",
+        ].includes(order.paymentStatus)
+    ) {
+        return;
+    }
 
-                    /*
-                     * Idempotency:
-                     *
-                     * If another webhook/status
-                     * request already processed this
-                     * order, don't restore stock twice.
-                     */
-                    if (
-                        [
-                            "PAID",
-                            "FAILED",
-                            "EXPIRED",
-                            "CANCELLED",
-                        ].includes(
-                            order.paymentStatus
-                        )
-                    ) {
-                        return;
-                    }
+    // Restore stock
+    for (const item of order.items) {
+        await Product.updateOne(
+            {
+                _id: item.product,
+            },
+            {
+                $inc: {
+                    stock: item.quantity,
+                },
+            }
+        );
+    }
 
-                    for (
-                        const item
-                        of order.items
-                    ) {
-                        await Order.db
-                            .model("Product")
-                            .updateOne(
-                                {
-                                    _id:
-                                        item.product,
-                                },
-                                {
-                                    $inc: {
-                                        stock:
-                                            item.quantity,
-                                    },
-                                },
-                                {
-                                    session,
-                                }
-                            );
-                    }
+    // Update payment/order
+    order.paymentStatus = paymentStatus;
+    order.orderStatus = "CANCELLED";
+    order.cancelledAt = new Date();
 
-                    order.paymentStatus =
-                        paymentStatus;
-
-                    order.orderStatus =
-                        "CANCELLED";
-
-                    order.cancelledAt =
-                        new Date();
-
-                    await order.save({
-                        session,
-                    });
-                }
-            );
-        } finally {
-            await session.endSession();
-        }
-    };
+    await order.save();
+};
 
 module.exports = {
     getUroPayPaymentStatus,
