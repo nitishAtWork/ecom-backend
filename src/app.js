@@ -22,6 +22,7 @@ const keywordInCityRoutes = require("./routes/keywordInCity.routes");
 const ourPresenceRoutes = require("./routes/ourPresence.routes");
 const enquiryRoutes = require("./routes/enquiry.routes");
 const slugRoutes = require("./routes/allSlug.routes");
+const pageRoutes = require("./routes/page.routes");
 const errorMiddleware = require("./middleware/error.middleware");
 
 const app = express();
@@ -219,6 +220,9 @@ app.use(
 app.use("/api/enquiries", enquiryRoutes);
 
 app.use("/api/slugs", slugRoutes);
+
+// pages
+app.use("/api/pages", pageRoutes);
 
 /*
  * 404 handler
