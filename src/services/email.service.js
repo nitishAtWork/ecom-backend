@@ -13,7 +13,7 @@ const sendEmail = async ({
             from: {
                 name:
                     process.env.MAIL_FROM_NAME ||
-                    "My Ecommerce",
+                    "Kamvasna.Shop",
 
                 address:
                     process.env.MAIL_FROM_EMAIL ||
@@ -29,9 +29,9 @@ const sendEmail = async ({
             html,
         });
 
-        console.log(
-            `Email sent to ${to}: ${info.messageId}`
-        );
+        // console.log(
+        //     `Email sent to ${to}: ${info.messageId}`
+        // );
 
         return info;
     } catch (error) {

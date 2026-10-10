@@ -57,7 +57,7 @@ const getCartById = async (cartId) => {
     }).populate({
         path: "items.product",
         select:
-            "name slug img price compareAtPrice stock sku brand isActive",
+            "name slug img price compareAtPrice stock sku brand deliveryCharge isActive",
     });
 };
 
@@ -94,19 +94,19 @@ const addToCart = async ({
     productId,
     quantity,
 }) => {
-    console.log(
-        "ADD TO CART SERVICE:",
-        {
-            cartId,
-            userId,
-            productId,
-            quantity,
-            productIdType:
-                typeof productId,
-            quantityType:
-                typeof quantity,
-        }
-    );
+    // console.log(
+    //     "ADD TO CART SERVICE:",
+    //     {
+    //         cartId,
+    //         userId,
+    //         productId,
+    //         quantity,
+    //         productIdType:
+    //             typeof productId,
+    //         quantityType:
+    //             typeof quantity,
+    //     }
+    // );
 
     /*
      * ==========================================
@@ -702,7 +702,7 @@ const getUserCart = async (userId) => {
     return Cart.findById(cart._id).populate({
         path: "items.product",
         select:
-            "name slug img price compareAtPrice stock sku brand isActive",
+            "name slug img price compareAtPrice stock sku brand deliveryCharge isActive",
     });
 };
 
@@ -718,7 +718,7 @@ const populateCart = async (cart) => {
         .populate({
             path: "items.product",
             select:
-                "name slug img price compareAtPrice stock sku brand isActive",
+                "name slug img price compareAtPrice stock sku brand deliveryCharge isActive",
         })
         .lean();
 };
@@ -752,6 +752,7 @@ const findCart = async ({
  */
 const calculateCartTotals = (cart) => {
     let subtotal = 0;
+    let deliveryCharge = 0;
     let itemCount = 0;
 
     const items = cart?.items || [];
@@ -761,17 +762,39 @@ const calculateCartTotals = (cart) => {
             continue;
         }
 
-        const price = Number(item.product.price) || 0;
-        const quantity = Number(item.quantity) || 0;
+        const price =
+            Number(item.product.price) || 0;
+
+        const productDeliveryCharge =
+            Number(
+                item.product.deliveryCharge
+            ) || 0;
+
+        const quantity =
+            Number(item.quantity) || 0;
 
         subtotal += price * quantity;
+
+        deliveryCharge +=
+            productDeliveryCharge;
+
         itemCount += quantity;
     }
 
+    subtotal = Number(subtotal.toFixed(2));
+    deliveryCharge = Number(
+        deliveryCharge.toFixed(2)
+    );
+
+    const total = Number(
+        (subtotal + deliveryCharge).toFixed(2)
+    );
+
     return {
-        subtotal: Number(subtotal.toFixed(2)),
+        subtotal,
+        deliveryCharge,
         itemCount,
-        total: Number(subtotal.toFixed(2)),
+        total,
     };
 };
 

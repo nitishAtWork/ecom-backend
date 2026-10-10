@@ -75,12 +75,12 @@ const createProductSchema = z.strictObject({
                 2,
                 "Product name must be at least 2 characters."
             )
-            .max(200),
+            .max(400),
 
         description: z
             .string()
             .trim()
-            .max(10000)
+            .max(100000)
             .optional()
             .default(""),
 
@@ -122,6 +122,19 @@ const createProductSchema = z.strictObject({
             )
             .default(0),
 
+        size: z
+            .string()
+            .trim()
+            .max(500)
+            .optional(),
+
+        deliveryCharge: z.coerce
+            .number()
+            .nonnegative(
+                "Delivery charge cannot be negative."
+            )
+            .optional(),
+
         sku: z
             .string()
             .trim()
@@ -137,7 +150,7 @@ const createProductSchema = z.strictObject({
             z
                 .string()
                 .trim()
-                .max(100)
+                .max(200)
                 .nullable()
                 .optional()
         ),
@@ -251,13 +264,13 @@ const updateProductSchema = z.strictObject({
                     2,
                     "Product name must be at least 2 characters."
                 )
-                .max(200)
+                .max(400)
                 .optional(),
 
             description: z
                 .string()
                 .trim()
-                .max(10000)
+                .max(100000)
                 .optional(),
 
             shortDescription: z
@@ -298,6 +311,19 @@ const updateProductSchema = z.strictObject({
                 )
                 .optional(),
 
+            size: z
+                .string()
+                .trim()
+                .max(500)
+                .optional(),
+
+            deliveryCharge: z.coerce
+                .number()
+                .nonnegative(
+                    "Delivery charge cannot be negative."
+                )
+                .optional(),
+
             sku: z
                 .string()
                 .trim()
@@ -314,7 +340,7 @@ const updateProductSchema = z.strictObject({
                 z
                     .string()
                     .trim()
-                    .max(100)
+                    .max(200)
                     .nullable()
             ).optional(),
 

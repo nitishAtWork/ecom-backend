@@ -4,11 +4,24 @@ const cookieParser = require("cookie-parser");
 const helmet = require("helmet");
 
 const authRoutes = require("./routes/auth.routes");
+const userRoutes = require("./routes/user.routes");
+const addressRoutes = require("./routes/address.routes");
 const productRoutes = require("./routes/product.routes");
+const keywordRoutes = require("./routes/keyword.routes");
 const cartRoutes = require("./routes/cart.routes");
 const orderRoutes = require("./routes/order.routes");
 const paymentRoutes = require("./routes/payment.routes");
 const websiteRoutes = require("./routes/website.routes");
+const reviewRoutes = require("./routes/review.routes");
+const dashboardRoutes = require("./routes/dashboard.routes");
+const cityRoutes = require("./routes/city.routes");
+const countryRoutes = require("./routes/country.routes");
+const stateRoutes = require("./routes/state.routes");
+const natureOfBusinessRoutes = require("./routes/natureOfBusiness.routes");
+const keywordInCityRoutes = require("./routes/keywordInCity.routes");
+const ourPresenceRoutes = require("./routes/ourPresence.routes");
+const enquiryRoutes = require("./routes/enquiry.routes");
+const slugRoutes = require("./routes/allSlug.routes");
 const errorMiddleware = require("./middleware/error.middleware");
 
 const app = express();
@@ -132,11 +145,26 @@ app.get("/api/health", (req, res) => {
  */
 app.use("/api/auth", authRoutes);
 
+app.use(
+    "/api/addresses",
+    addressRoutes
+);
+
+app.use(
+    "/api/users",
+    userRoutes
+);
 
 // Product routes
 app.use(
     "/api/products",
     productRoutes
+);
+
+// keyword routes
+app.use(
+    "/api/keywords",
+    keywordRoutes
 );
 
 // Cart routes
@@ -154,11 +182,43 @@ app.use(
     paymentRoutes
 );
 
+// review routes
+app.use(
+    "/api",
+    reviewRoutes
+);
+
 // Website routes
 app.use(
     "/api/website",
     websiteRoutes
 );
+
+app.use("/api/dashboard", dashboardRoutes);
+
+// location
+app.use("/api/countries", countryRoutes);
+
+app.use("/api/states", stateRoutes);
+app.use("/api/cities", cityRoutes);
+
+// nature of business
+app.use("/api/nature-of-business", natureOfBusinessRoutes);
+
+// keyword in city
+app.use(
+    "/api/keyword-in-city",
+    keywordInCityRoutes
+);
+// our presence
+app.use(
+    "/api/our-presence",
+    ourPresenceRoutes
+);
+
+app.use("/api/enquiries", enquiryRoutes);
+
+app.use("/api/slugs", slugRoutes);
 
 /*
  * 404 handler

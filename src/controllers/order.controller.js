@@ -146,16 +146,23 @@ const getAdminOrdersController = async (
 ) => {
     try {
         const {
-            page,
-            limit,
+            page = 1,
+            limit = 20,
             status,
+            paymentStatus,
         } = req.query;
+
+        // console.log(
+        //     "ADMIN ORDERS QUERY:",
+        //     req.query
+        // );
 
         const result =
             await getAdminOrders({
-                page,
-                limit,
+                page: Number(page),
+                limit: Number(limit),
                 status,
+                paymentStatus,
             });
 
         return res.status(200).json({

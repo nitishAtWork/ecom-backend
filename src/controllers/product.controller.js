@@ -31,30 +31,6 @@ const createProduct = async (
 ) => {
     try {
 
-         console.log(
-            "========== PRODUCT CREATE =========="
-        );
-
-        console.log(
-            "REQ.BODY:",
-            req.body
-        );
-
-        console.log(
-            "REQ.FILES:",
-            req.files
-        );
-
-        console.log(
-            "IMG:",
-            req.files?.img
-        );
-
-        console.log(
-            "IMAGES:",
-            req.files?.images
-        );
-
         /*
          * Copy normal form fields only.
          */

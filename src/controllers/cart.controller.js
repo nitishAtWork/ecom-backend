@@ -46,18 +46,6 @@ const addToCart = async (
             quantity,
         } = req.body;
 
-        console.log(
-            "ADD TO CART CONTROLLER:",
-            {
-                body: req.body,
-                productId,
-                quantity,
-                cartId: req.cartId,
-                userId:
-                    req.user?._id || null,
-            }
-        );
-
         const result =
             await addToCartService({
                 cartId: req.cartId,

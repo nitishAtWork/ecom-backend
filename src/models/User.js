@@ -49,7 +49,11 @@ const userSchema = new mongoose.Schema(
 
         role: {
             type: String,
-            enum: ["SUPERADMIN", "ADMIN", "USER"],
+            enum: [
+                "SUPERADMIN",
+                "ADMIN",
+                "USER",
+            ],
             default: "USER",
             index: true,
         },
@@ -83,11 +87,13 @@ const userSchema = new mongoose.Schema(
         isActive: {
             type: Boolean,
             default: true,
+            index: true,
         },
 
         deletedAt: {
             type: Date,
             default: null,
+            index: true,
         },
 
         lastLoginAt: {
@@ -100,4 +106,16 @@ const userSchema = new mongoose.Schema(
     }
 );
 
-module.exports = mongoose.model("User", userSchema);
+userSchema.index({
+    createdAt: -1,
+});
+
+userSchema.index({
+    role: 1,
+    isActive: 1,
+});
+
+module.exports = mongoose.model(
+    "User",
+    userSchema
+);

@@ -24,9 +24,9 @@ const deleteUploadedFile = async (fileUrl) => {
     try {
         await fs.unlink(filePath);
 
-        console.log(
-            `Deleted file: ${filePath}`
-        );
+        // console.log(
+        //     `Deleted file: ${filePath}`
+        // );
     } catch (error) {
         /*
          * File may already have been deleted.
@@ -60,7 +60,6 @@ const deleteProductFiles = async (product) => {
         }
     }
 };
-
 
 const deleteProductImage = async (imagePath) => {
     if (!imagePath) {
@@ -97,7 +96,6 @@ const deleteProductImage = async (imagePath) => {
     }
 };
 
-
 const deleteProductImages = async (
     images = []
 ) => {
@@ -110,10 +108,63 @@ const deleteProductImages = async (
     }
 };
 
+const deleteKeywordImage = async (imagePath) => {
+    if (!imagePath || typeof imagePath !== "string") {
+        return;
+    }
+
+    // Convert full URL to a relative upload path.
+    const cleanPath = imagePath
+        .replace(/^https?:\/\/[^/]+/i, "")
+        .replace(/^\/+/, "");
+
+    // Only allow deletion from the keywords upload directory.
+    if (!cleanPath.startsWith("uploads/keywords/")) {
+        return;
+    }
+
+    const uploadRoot = path.resolve(
+        process.cwd(),
+        "uploads",
+        "keywords"
+    );
+
+    const filePath = path.resolve(
+        process.cwd(),
+        cleanPath
+    );
+
+    // Prevent path traversal outside the keywords directory.
+    if (
+        !filePath.startsWith(uploadRoot + path.sep)
+    ) {
+        return;
+    }
+
+    try {
+        await fs.unlink(filePath);
+    } catch (error) {
+        if (error.code !== "ENOENT") {
+            throw error;
+        }
+    }
+};
+
+const deleteKeywordImages = async (images = []) => {
+    if (!Array.isArray(images)) {
+        return;
+    }
+
+    for (const image of images) {
+        await deleteKeywordImage(image);
+    }
+};
 
 module.exports = {
     deleteUploadedFile,
     deleteProductFiles,
-      deleteProductImage,
+    deleteProductImage,
     deleteProductImages,
+    deleteKeywordImage,
+    deleteKeywordImages,
 };

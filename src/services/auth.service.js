@@ -56,16 +56,10 @@ const registerUser = async ({
     });
 
     if (existingUser) {
-
         /*
-         * If account exists but email isn't verified,
-         * don't create another account.
-         *
-         * The frontend can ask the user to verify
-         * their existing account.
+         * Account exists but email is not verified.
          */
         if (!existingUser.emailVerified) {
-
             const error = new Error(
                 "An account with this email already exists but has not been verified."
             );
@@ -75,6 +69,22 @@ const registerUser = async ({
             throw error;
         }
 
+        /*
+         * Account was verified but is no longer active.
+         */
+        if (!existingUser.isActive) {
+            const error = new Error(
+                "Your account is no longer available. Please contact support."
+            );
+
+            error.statusCode = 403;
+
+            throw error;
+        }
+
+        /*
+         * Active and verified account already exists.
+         */
         const error = new Error(
             "An account with this email already exists."
         );
@@ -556,13 +566,8 @@ const refreshAccessToken = async (refreshToken) => {
 | Send Login OTP
 |--------------------------------------------------------------------------
 */
-
-const sendLoginOTP = async ({
-    email,
-}) => {
-
+const sendLoginOTP = async ({ email }) => {
     email = email.toLowerCase().trim();
-
 
     /*
      * Find user
@@ -571,41 +576,36 @@ const sendLoginOTP = async ({
         email,
     });
 
-
     /*
-     * Generic response for unknown emails.
-     *
-     * This prevents account enumeration.
+     * User not registered
      */
     if (!user) {
+        const error = new Error(
+            "No account is registered with this email address."
+        );
 
-        return {
-            message:
-                "If an account exists with this email, a login OTP will be sent.",
-        };
+        error.statusCode = 404;
+
+        throw error;
     }
 
-
     /*
-     * Check account status
+     * Account is inactive
      */
     if (!user.isActive) {
+        const error = new Error(
+            "Your account is no longer available. Please contact support."
+        );
 
-        /*
-         * Don't reveal account status.
-         */
-        return {
-            message:
-                "If an account exists with this email, a login OTP will be sent.",
-        };
+        error.statusCode = 403;
+
+        throw error;
     }
 
-
     /*
-     * Email must be verified.
+     * Email is not verified
      */
     if (!user.emailVerified) {
-
         const error = new Error(
             "Please verify your email before using OTP login."
         );
@@ -615,20 +615,16 @@ const sendLoginOTP = async ({
         throw error;
     }
 
-
     /*
      * Send OTP
      */
-    await require("./authEmail.service")
-        .sendLoginOTP({
-            email: user.email,
-            name: user.name,
-        });
-
+    await require("./authEmail.service").sendLoginOTP({
+        email: user.email,
+        name: user.name,
+    });
 
     return {
-        message:
-            "If an account exists with this email, a login OTP will be sent.",
+        message: "Login OTP has been sent to your email.",
     };
 };
 
@@ -900,8 +896,8 @@ const verifyPasswordResetOTP = async ({
      * Generate a separate short-lived
      * password reset token.
      */
-   const resetToken =
-    generatePasswordResetToken(user);
+    const resetToken =
+        generatePasswordResetToken(user);
 
     return {
         resetToken,

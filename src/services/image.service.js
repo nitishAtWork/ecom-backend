@@ -30,7 +30,7 @@ const deleteProductImage = async (imagePath) => {
 
     try {
         await fs.unlink(filePath);
-        console.log(`Deleted old product image: ${filename}`);
+        // console.log(`Deleted old product image: ${filename}`);
     } catch (error) {
         // File already doesn't exist
         if (error.code !== "ENOENT") {

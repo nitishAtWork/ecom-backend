@@ -40,6 +40,8 @@ const router = express.Router();
 
 /*
  * POST /api/orders
+ *
+ * Create order
  */
 router.post(
     "/",
@@ -50,6 +52,8 @@ router.post(
 
 /*
  * GET /api/orders
+ *
+ * Get logged-in user's orders
  */
 router.get(
     "/",
@@ -59,34 +63,19 @@ router.get(
 );
 
 /*
- * GET /api/orders/:id
- */
-router.get(
-    "/:id",
-    authenticate,
-    validate(orderIdSchema),
-    getOrder
-);
-
-/*
- * PATCH /api/orders/:id/cancel
- */
-router.patch(
-    "/:id/cancel",
-    authenticate,
-    validate(cancelOrderSchema),
-    cancelOrder
-);
-
-
-/*
  * ==========================================
  * ADMIN
  * ==========================================
+ *
+ * IMPORTANT:
+ * Admin routes MUST come before /:id
+ * so "/admin" is not treated as an order ID.
  */
 
 /*
  * GET /api/orders/admin
+ *
+ * Get all orders for admin
  */
 router.get(
     "/admin",
@@ -95,12 +84,13 @@ router.get(
         "ADMIN",
         "SUPERADMIN"
     ),
-    validate(listOrdersSchema),
     getAdminOrdersController
 );
 
 /*
  * GET /api/orders/admin/:id
+ *
+ * Get single order for admin
  */
 router.get(
     "/admin/:id",
@@ -115,6 +105,8 @@ router.get(
 
 /*
  * PATCH /api/orders/admin/:id/status
+ *
+ * Update order status
  */
 router.patch(
     "/admin/:id/status",
@@ -123,10 +115,40 @@ router.patch(
         "ADMIN",
         "SUPERADMIN"
     ),
-    validate(
-        updateOrderStatusSchema
-    ),
+    validate(updateOrderStatusSchema),
     updateAdminOrderStatus
+);
+
+/*
+ * ==========================================
+ * CUSTOMER - SINGLE ORDER
+ * ==========================================
+ */
+
+/*
+ * GET /api/orders/:id
+ *
+ * Get logged-in user's single order
+ *
+ * KEEP THIS AFTER /admin ROUTES
+ */
+router.get(
+    "/:id",
+    authenticate,
+    validate(orderIdSchema),
+    getOrder
+);
+
+/*
+ * PATCH /api/orders/:id/cancel
+ *
+ * Cancel logged-in user's order
+ */
+router.patch(
+    "/:id/cancel",
+    authenticate,
+    validate(cancelOrderSchema),
+    cancelOrder
 );
 
 module.exports = router;

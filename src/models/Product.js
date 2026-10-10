@@ -28,7 +28,7 @@ const productSchema = new mongoose.Schema(
             required: true,
             trim: true,
             minlength: 2,
-            maxlength: 200,
+            maxlength: 400,
         },
 
         slug: {
@@ -50,7 +50,7 @@ const productSchema = new mongoose.Schema(
             type: String,
             default: "",
             trim: true,
-            maxlength: 500,
+            maxlength: 600,
         },
 
         img: {
@@ -88,6 +88,19 @@ const productSchema = new mongoose.Schema(
             default: 0,
         },
 
+        size: {
+            type: String,
+            default: null,
+            trim: true,
+            maxlength: 500,
+        },
+
+        deliveryCharge: {
+            type: Number,
+            default: 0,
+            min: 0,
+        },
+
         sku: {
             type: String,
             required: true,
@@ -101,12 +114,25 @@ const productSchema = new mongoose.Schema(
             type: String,
             default: null,
             trim: true,
-            maxlength: 100,
+            maxlength: 200,
         },
 
         specifications: {
             type: [specificationSchema],
             default: [],
+        },
+
+        ratingAverage: {
+            type: Number,
+            default: 0,
+            min: 0,
+            max: 5,
+        },
+
+        reviewCount: {
+            type: Number,
+            default: 0,
+            min: 0,
         },
 
         isFeatured: {

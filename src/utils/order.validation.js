@@ -107,7 +107,7 @@ const listOrdersSchema = z.strictObject({
 });
 
 const orderIdSchema = z.strictObject({
-    body: z.strictObject({}),
+    body: z.strictObject({}).default({}),
 
     params: z.strictObject({
         id: z
@@ -118,7 +118,7 @@ const orderIdSchema = z.strictObject({
             ),
     }),
 
-    query: z.strictObject({}),
+    query: z.strictObject({}).default({}),
 });
 
 const cancelOrderSchema =
