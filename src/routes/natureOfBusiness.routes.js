@@ -66,7 +66,7 @@ router.get(
 router.post(
     "/",
     authenticate,
-    authorize("ADMIN", "SUPERADMIN"),
+    authorize("SUPERADMIN"),
     createNatureOfBusiness
 );
 
@@ -84,7 +84,7 @@ router.patch(
 router.delete(
     "/:id",
     authenticate,
-    authorize("ADMIN", "SUPERADMIN"),
+    authorize("SUPERADMIN"),
     deleteNatureOfBusiness
 );
 

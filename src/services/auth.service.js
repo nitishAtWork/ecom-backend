@@ -605,15 +605,15 @@ const sendLoginOTP = async ({ email }) => {
     /*
      * Email is not verified
      */
-    if (!user.emailVerified) {
-        const error = new Error(
-            "Please verify your email before using OTP login."
-        );
+    // if (!user.emailVerified) {
+    //     const error = new Error(
+    //         "Please verify your email before using OTP login."
+    //     );
 
-        error.statusCode = 403;
+    //     error.statusCode = 403;
 
-        throw error;
-    }
+    //     throw error;
+    // }
 
     /*
      * Send OTP
@@ -682,15 +682,23 @@ const loginWithOTP = async ({
     /*
      * Email must already be verified.
      */
+    // if (!user.emailVerified) {
+
+    //     const error = new Error(
+    //         "Please verify your email before logging in."
+    //     );
+
+    //     error.statusCode = 403;
+
+    //     throw error;
+    // }
     if (!user.emailVerified) {
 
-        const error = new Error(
-            "Please verify your email before logging in."
-        );
+        /*
+    * Mark email verified
+    */
+        user.emailVerified = true;
 
-        error.statusCode = 403;
-
-        throw error;
     }
 
 
@@ -1169,6 +1177,56 @@ const getActiveSessions = async (userId) => {
     return getUserSessions(userId);
 };
 
+
+const getLoginActivity = async (userId) => {
+    const sessions = await Session.find({
+        user: userId,
+    })
+        .select(
+            "_id userAgent ipAddress createdAt lastUsedAt expiresAt revokedAt"
+        )
+        .sort({ createdAt: -1 })
+        .lean();
+
+    const now = new Date();
+
+    return sessions.map((session) => {
+        let status = "active";
+
+        if (session.revokedAt) {
+            status = "revoked";
+        } else if (
+            session.expiresAt &&
+            new Date(session.expiresAt) <= now
+        ) {
+            status = "expired";
+        }
+
+        return {
+            ...session,
+            status,
+        };
+    });
+};
+
+const logoutSession = async ({ userId, sessionId }) => {
+    const session = await Session.findOne({
+        _id: sessionId,
+        user: userId,
+        revokedAt: null,
+    });
+
+    if (!session) {
+        const error = new Error("Active session not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    await revokeSession(session._id);
+
+    return true;
+};
+
 module.exports = {
     registerUser,
     verifyEmail,
@@ -1183,4 +1241,6 @@ module.exports = {
     refreshAccessToken,
     logoutAllDevices,
     getActiveSessions,
+    getLoginActivity,
+    logoutSession,
 };

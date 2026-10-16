@@ -873,7 +873,7 @@ const getWebsiteInfo = async (req, res) => {
     }
 
     // Do not expose sensitive/internal API ID
-    delete websiteInfo.apiId;
+    // delete websiteInfo.apiId;
 
     return res.status(200).json({
       success: true,

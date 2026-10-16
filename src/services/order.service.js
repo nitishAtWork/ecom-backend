@@ -62,9 +62,11 @@ const createOrder = async ({
     shippingAddress,
     paymentMethod,
 }) => {
-    // ==========================================
-    // 1. Validate user
-    // ==========================================
+    if (!["COD", "ONLINE"].includes(paymentMethod)) {
+        const error = new Error("Invalid payment method.");
+        error.statusCode = 400;
+        throw error;
+    }
 
     const user = await User.findById(userId).lean();
 
@@ -72,103 +74,117 @@ const createOrder = async ({
         const error = new Error(
             "User account is no longer available."
         );
-
         error.statusCode = 401;
-
         throw error;
     }
 
-    // ==========================================
-    // 2. Get user's cart
-    // ==========================================
-
-    const cart = await Cart.findOne({
-        user: userId,
-    });
+    const cart = await Cart.findOne({ user: userId });
 
     if (!cart || !cart.items.length) {
-        const error = new Error(
-            "Your cart is empty."
-        );
-
+        const error = new Error("Your cart is empty.");
         error.statusCode = 400;
-
         throw error;
     }
 
-    // ==========================================
-    // 3. Prepare order items
-    // ==========================================
-
     const orderItems = [];
-
-    let subtotal = 0;
-
-    /*
-     * Keep track of successfully reserved stock.
-     *
-     * If order creation fails later,
-     * restore the stock.
-     */
     const reservedStock = [];
 
-    try {
-        // ==========================================
-        // 4. Validate products + reserve stock
-        // ==========================================
+    let subtotal = 0;
+    let createdOrder = null;
+    let stockRestored = false;
+    let providerOrderCreated = false;
+    let providerOutcomeUnknown = false;
 
+    // Restore reserved stock only once in this invocation.
+    const restoreReservedStock = async () => {
+        if (stockRestored) return;
+
+        for (const reserved of reservedStock) {
+            await Product.updateOne(
+                { _id: reserved.productId },
+                {
+                    $inc: {
+                        stock: reserved.quantity,
+                    },
+                }
+            );
+        }
+
+        stockRestored = true;
+
+        // If your Order schema has stockRestoredAt, persist it here.
+        if (createdOrder && createdOrder.stockRestoredAt !== undefined) {
+            createdOrder.stockRestoredAt = new Date();
+            await createdOrder.save();
+        }
+    };
+
+    // Clear only after the order/payment-session creation is successful.
+    const clearCart = async () => {
+        cart.items = [];
+        await cart.save();
+    };
+
+    // Order-creation notifications (COD or pending online order).
+    // For ONLINE orders, do not call this until payment succeeds.
+    const sendOrderEmailsSafely = async (order) => {
+        try {
+            await sendOrderReceivedEmail({ user, order });
+        } catch (error) {
+            console.error(
+                "Customer order notification failed:",
+                error
+            );
+        }
+
+        try {
+            await sendAdminNewOrderEmail({
+                order,
+                customer: user,
+            });
+        } catch (error) {
+            console.error(
+                "Admin order notification failed:",
+                error
+            );
+        }
+    };
+
+    try {
+        // 1. Reserve stock atomically and snapshot product information.
         for (const cartItem of cart.items) {
-            /*
-             * Atomic stock deduction.
-             */
-            const product =
-                await Product.findOneAndUpdate(
-                    {
-                        _id: cartItem.product,
-                        isActive: true,
-                        stock: {
-                            $gte: cartItem.quantity,
-                        },
+            const product = await Product.findOneAndUpdate(
+                {
+                    _id: cartItem.product,
+                    isActive: true,
+                    stock: { $gte: cartItem.quantity },
+                },
+                {
+                    $inc: {
+                        stock: -cartItem.quantity,
                     },
-                    {
-                        $inc: {
-                            stock: -cartItem.quantity,
-                        },
-                    },
-                    {
-                        returnDocument: "after",
-                    }
-                );
+                },
+                { returnDocument: "after" }
+            );
 
             if (!product) {
                 const error = new Error(
-                    "One or more products in your cart are no longer available or do not have enough stock."
+                    "One or more products are unavailable or out of stock."
                 );
-
                 error.statusCode = 400;
-
                 throw error;
             }
 
-            /*
-             * Remember stock reservation.
-             */
             reservedStock.push({
                 productId: product._id,
                 quantity: cartItem.quantity,
             });
 
-            // ==========================================
-            // Snapshot product information
-            // ==========================================
-
             const price = Number(product.price);
-
-            const quantity =
-                Number(cartItem.quantity);
-
-            const itemSubtotal =
-                price * quantity;
+            const quantity = Number(cartItem.quantity);
+            const itemSubtotal = Number(
+                (price * quantity).toFixed(2)
+            );
 
             subtotal += itemSubtotal;
 
@@ -179,22 +195,13 @@ const createOrder = async ({
                 img: product.img || "",
                 price,
                 quantity,
-                subtotal: Number(
-                    itemSubtotal.toFixed(2)
-                ),
+                subtotal: itemSubtotal,
             });
         }
 
-        // ==========================================
-        // 5. Calculate totals
-        // ==========================================
-
-        subtotal = Number(
-            subtotal.toFixed(2)
-        );
+        subtotal = Number(subtotal.toFixed(2));
 
         const shippingAmount = 0;
-
         const discountAmount = 0;
 
         const totalAmount = Number(
@@ -205,233 +212,150 @@ const createOrder = async ({
             ).toFixed(2)
         );
 
-        // ==========================================
-        // 6. Payment / order status
-        // ==========================================
+        // 2. Create the local order.
+        createdOrder = await Order.create({
+            orderNumber: generateOrderNumber(),
+            user: userId,
+            items: orderItems,
+            shippingAddress,
+            subtotal,
+            shippingAmount,
+            discountAmount,
+            totalAmount,
+            paymentMethod,
+            paymentProvider:
+                paymentMethod === "ONLINE" ? "UROPAY" : "COD",
+            paymentStatus: "PENDING",
+            orderStatus:
+                paymentMethod === "COD" ? "CONFIRMED" : "PENDING",
+        });
 
-        const paymentStatus = "PENDING";
-
-        const orderStatus =
-            paymentMethod === "COD"
-                ? "CONFIRMED"
-                : "PENDING";
-
-        // ==========================================
-        // 7. Generate order number
-        // ==========================================
-
-        const orderNumber =
-            generateOrderNumber();
-
-        // ==========================================
-        // 8. Create local order
-        // ==========================================
-
-        const createdOrder =
-            await Order.create({
-                orderNumber,
-
-                user: userId,
-
-                items: orderItems,
-
-                shippingAddress,
-
-                subtotal,
-
-                shippingAmount,
-
-                discountAmount,
-
-                totalAmount,
-
-                paymentMethod,
-
-                paymentProvider:
-                    paymentMethod === "ONLINE"
-                        ? "UROPAY"
-                        : "COD",
-
-                paymentStatus,
-
-                orderStatus,
-            });
-
-        // ==========================================
-        // 9. Clear cart
-        // ==========================================
-
-        cart.items = [];
-
-        await cart.save();
-
-        // ==========================================
-        // 10. COD
-        // ==========================================
-
+        // 3. COD: clear cart and send order notifications immediately.
         if (paymentMethod === "COD") {
-            /*
-             * Order is confirmed.
-             *
-             * Send order received email.
-             *
-             * Email failure will NOT affect
-             * the successful order.
-             */
-            await sendOrderReceivedEmail({
-                user,
-                order: createdOrder,
-            });
+            await clearCart();
 
-            await sendAdminNewOrderEmail({
-                order: createdOrder,
-                customer: user,
-            });
+            // COD order notification: send customer + admin emails.
+            await sendOrderEmailsSafely(createdOrder);
 
             return createdOrder;
         }
 
-        // ==========================================
-        // 11. ONLINE → UroPay
-        // ==========================================
+        // 4. ONLINE: create exactly one UroPai payment session.
+        let providerOrder;
 
         try {
-            const providerOrder =
-                await createUroPayOrder({
-                    tenantOrderRef:
-                        createdOrder.orderNumber,
-
-                    amount:
-                        createdOrder.totalAmount,
-
-                    customerEmail:
-                        user.email,
-
-                    customerPhone:
-                        shippingAddress.phone,
-
-                    returnUrl:
-                        process.env.UROPAY_RETURN_URL,
-
-                    webhookUrl:
-                        process.env.UROPAY_WEBHOOK_URL,
-                });
-
-            // ==========================================
-            // 12. Save UroPay details
-            // ==========================================
-
-            createdOrder.paymentProvider =
-                "UROPAY";
-
-            createdOrder.paymentOrderId =
-                providerOrder.id;
-
-            createdOrder.paymentOrderRef =
-                providerOrder.tenantOrderRef;
-
-            createdOrder.paymentCheckoutUrl =
-                providerOrder.openUrl;
-
-            createdOrder.paymentStatus =
-                "PENDING";
-
-            createdOrder.orderStatus =
-                "PENDING";
-
-            await createdOrder.save();
-
-            // ==========================================
-            // 13. Send order received email
-            // ==========================================
-
-            /*
-             * At this point the UroPay order has
-             * successfully been created and saved.
-             *
-             * Payment is still pending.
-             */
-            await sendOrderReceivedEmail({
-                user,
-                order: createdOrder,
+            providerOrder = await createUroPayOrder({
+                tenantOrderRef: createdOrder.orderNumber,
+                amount: createdOrder.totalAmount,
+                customerEmail: user.email,
+                customerPhone: createdOrder.shippingAddress.phone,
+                returnUrl: process.env.UROPAY_RETURN_URL,
+                webhookUrl: process.env.UROPAY_WEBHOOK_URL,
             });
 
-            await sendAdminNewOrderEmail({
-                order: createdOrder,
-                customer: user,
-            });
-
-            return createdOrder;
+            providerOrderCreated = true;
         } catch (paymentError) {
-            /*
-             * UroPay order creation failed.
-             *
-             * Restore reserved stock.
-             */
+            const status =
+                paymentError.response?.status ??
+                paymentError.statusCode;
 
-            for (const reserved of reservedStock) {
-                await Product.updateOne(
-                    {
-                        _id:
-                            reserved.productId,
-                    },
-                    {
-                        $inc: {
-                            stock:
-                                reserved.quantity,
-                        },
-                    }
+            console.error("UroPai payment initialization error:", {
+                message: paymentError.message,
+                status,
+                response: paymentError.response?.data,
+                code: paymentError.code,
+                orderReference: createdOrder.orderNumber,
+            });
+
+            /*
+             * Network failures, timeouts and provider 5xx responses
+             * may leave the provider order created but its response lost.
+             * Preserve stock and cart until the outcome is reconciled.
+             */
+            providerOutcomeUnknown =
+                !status ||
+                status === 408 ||
+                status >= 500;
+
+            if (providerOutcomeUnknown) {
+                const error = new Error(
+                    `Payment initialization could not be confirmed. ` +
+                    `Do not place another order yet. Contact support ` +
+                    `with order reference ${createdOrder.orderNumber}.`
                 );
+
+                error.statusCode = 502;
+                error.cause = paymentError;
+                throw error;
             }
 
-            /*
-             * Cancel local order.
-             */
-
-            createdOrder.paymentStatus =
-                "FAILED";
-
-            createdOrder.orderStatus =
-                "CANCELLED";
-
-            createdOrder.cancelledAt =
-                new Date();
-
+            // Definitive rejection: mark the local order failed.
+            createdOrder.paymentStatus = "FAILED";
+            createdOrder.orderStatus = "CANCELLED";
+            createdOrder.cancelledAt = new Date();
             await createdOrder.save();
+
+            await restoreReservedStock();
 
             const error = new Error(
                 "Unable to start online payment. Your order was cancelled. Please try again."
             );
-
             error.statusCode = 502;
-
             error.cause = paymentError;
-
             throw error;
         }
+
+        // 5. Validate the minimum required provider response fields.
+        if (
+            !providerOrder?.id ||
+            !providerOrder?.openUrl ||
+            !providerOrder?.tenantOrderRef
+        ) {
+            /*
+             * The provider may have created a session despite returning
+             * an incomplete response. Preserve stock and cart for review.
+             */
+            providerOutcomeUnknown = true;
+
+            const error = new Error(
+                `UroPai returned incomplete payment-session details. ` +
+                `Contact support with order reference ${createdOrder.orderNumber}.`
+            );
+            error.statusCode = 502;
+            throw error;
+        }
+
+        // 6. Persist provider details before clearing the cart.
+        createdOrder.paymentProvider = "UROPAY";
+        createdOrder.paymentOrderId = providerOrder.id;
+        createdOrder.paymentOrderRef = providerOrder.tenantOrderRef;
+        createdOrder.paymentCheckoutUrl = providerOrder.openUrl;
+        createdOrder.paymentStatus = "PENDING";
+        createdOrder.orderStatus = "PENDING";
+
+        await createdOrder.save();
+
+        // 7. Clear the cart after the payment session has been saved.
+        await clearCart();
+
+        return createdOrder;
     } catch (error) {
         /*
-         * Something failed before the order was
-         * successfully created.
-         *
-         * Restore any stock already reserved.
+         * Restore stock only when no provider session was created and
+         * the provider outcome is known. Never release stock for an
+         * ambiguous provider response without reconciliation.
          */
-
         if (
-            reservedStock.length > 0
+            !stockRestored &&
+            !providerOrderCreated &&
+            !providerOutcomeUnknown
         ) {
-            for (const reserved of reservedStock) {
-                await Product.updateOne(
-                    {
-                        _id:
-                            reserved.productId,
-                    },
-                    {
-                        $inc: {
-                            stock:
-                                reserved.quantity,
-                        },
-                    }
+            try {
+                await restoreReservedStock();
+            } catch (restoreError) {
+                console.error(
+                    "CRITICAL: Failed to restore reserved stock:",
+                    restoreError
                 );
             }
         }
@@ -758,6 +682,7 @@ const updateOrderStatus = async ({
 
     return order;
 };
+
 
 module.exports = {
     createOrder,

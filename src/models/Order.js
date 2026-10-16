@@ -228,10 +228,38 @@ const orderSchema = new mongoose.Schema(
                 "FAILED",
                 "EXPIRED",
                 "CANCELLED",
+                "REFUNDED",
             ],
             default: "PENDING",
             index: true,
         },
+
+        stockRestoredAt: {
+            type: Date,
+            default: null,
+        },
+
+
+        paymentCustomerEmailSentAt: {
+            type: Date,
+            default: null,
+        },
+
+        paymentCustomerEmailClaimedAt: {
+            type: Date,
+            default: null,
+        },
+
+        paymentAdminEmailSentAt: {
+            type: Date,
+            default: null,
+        },
+
+        paymentAdminEmailClaimedAt: {
+            type: Date,
+            default: null,
+        },
+
 
         paymentPaidAt: {
             type: Date,

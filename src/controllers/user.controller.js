@@ -4,9 +4,12 @@ const userService = require(
 
 const {
     getCustomers,
+    getAdminUser,
     getCustomerById,
     updateCustomer,
+    updateUserRole,
     toggleCustomerStatus,
+    toggleAdminStatus,
 } = require(
     "../services/user.service"
 );
@@ -84,6 +87,23 @@ const getCustomerController = async (
     }
 };
 
+const getAdminUserController = async (req, res, next) => {
+    try {
+        const result = await getAdminUser({
+            page: req.query.page,
+            limit: req.query.limit,
+            search: req.query.search,
+            isActive: req.query.isActive,
+        });
+
+        return res.status(200).json({
+            success: true,
+            data: result,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
 /*
  * GET /api/users/me
  */
@@ -190,6 +210,54 @@ const updateCustomerController = async (
         });
     }
 };
+/*
+|--------------------------------------------------------------------------
+| Update User Role
+|--------------------------------------------------------------------------
+*/
+
+const updateUserRoleController = async (
+    req,
+    res
+) => {
+    try {
+        const {
+            id,
+        } = req.params;
+
+        const {
+            role,
+        } = req.body;
+
+        const customer =
+            await updateUserRole({
+                customerId: id,
+                role,
+            });
+
+        return res.status(200).json({
+            success: true,
+            message: "User role updated successfully.",
+            data: {
+                customer,
+            },
+        });
+    } catch (error) {
+        console.error(
+            "Update user role controller error:",
+            error
+        );
+
+        return res.status(
+            error.statusCode || 500
+        ).json({
+            success: false,
+            message:
+                error.message ||
+                "Failed to update user role.",
+        });
+    }
+};
 
 const toggleCustomerStatusController =
     async (req, res) => {
@@ -229,6 +297,44 @@ const toggleCustomerStatusController =
         }
     };
 
+const toggleAdminStatusController =
+    async (req, res) => {
+        try {
+            const {
+                id,
+            } = req.params;
+
+            const customer =
+                await toggleAdminStatus(
+                    id
+                );
+
+            return res.status(200).json({
+                success: true,
+                message: customer.isActive
+                    ? "Admin activated successfully."
+                    : "Admin deactivated successfully.",
+                data: {
+                    customer,
+                },
+            });
+        } catch (error) {
+            console.error(
+                "Toggle customer status error:",
+                error
+            );
+
+            return res.status(
+                error.statusCode || 500
+            ).json({
+                success: false,
+                message:
+                    error.message ||
+                    "Failed to update admin status.",
+            });
+        }
+    };
+
 module.exports = {
     getMe,
     updateMyProfile,
@@ -236,4 +342,7 @@ module.exports = {
     getCustomersController,
     updateCustomerController,
     toggleCustomerStatusController,
+    toggleAdminStatusController,
+    getAdminUserController,
+    updateUserRoleController,
 };

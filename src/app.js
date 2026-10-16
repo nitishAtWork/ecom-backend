@@ -82,25 +82,22 @@ app.use(
     })
 );
 
+
 /*
- * Request body limits
- *
- * Prevent unnecessarily large JSON requests.
+ * JSON body parser.
+ * Capture the original request bytes for UroPai webhook
+ * signature verification before JSON parsing changes the body.
  */
 app.use(
     express.json({
         limit: "1mb",
-
-        verify: (
-            req,
-            res,
-            buffer
-        ) => {
+        verify: (req, res, buffer) => {
             if (
-                req.originalUrl ===
-                "/api/payments/uropay/webhook"
+                req.originalUrl.startsWith(
+                    "/api/payments/uropay/webhook"
+                )
             ) {
-                req.rawBody = buffer;
+                req.rawBody = Buffer.from(buffer);
             }
         },
     })
@@ -112,6 +109,7 @@ app.use(
         limit: "1mb",
     })
 );
+
 
 /*
  * Cookies

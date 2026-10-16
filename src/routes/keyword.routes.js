@@ -108,7 +108,6 @@ router.post(
     "/",
     authenticate,
     authorize(
-        "ADMIN",
         "SUPERADMIN"
     ),
 
@@ -168,7 +167,6 @@ router.delete(
     "/:id",
     authenticate,
     authorize(
-        "ADMIN",
         "SUPERADMIN"
     ),
 

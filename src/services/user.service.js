@@ -134,6 +134,51 @@ const updateCustomer = async ({
         updatedAt: customer.updatedAt,
     };
 };
+/*
+|--------------------------------------------------------------------------
+| Update Role
+|--------------------------------------------------------------------------
+*/
+
+const updateUserRole = async ({
+    customerId,
+    role,
+}) => {
+    if (!mongoose.Types.ObjectId.isValid(customerId)) {
+        const error = new Error("Invalid customer ID.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const customer = await User.findOne({
+        _id: customerId,
+        role: role,
+    });
+
+    if (!customer) {
+        const error = new Error("Customer not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    // toggle role between USER and ADMIN
+    customer.role =
+        customer.role === "USER" ? "ADMIN" : "USER";
+
+    await customer.save();
+
+
+    return {
+        _id: customer._id,
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone,
+        role: customer.role,
+        isActive: customer.isActive,
+        createdAt: customer.createdAt,
+        updatedAt: customer.updatedAt,
+    };
+};
 
 /*
  * Get current user.
@@ -278,6 +323,65 @@ const getCustomers = async ({
         },
     };
 };
+/*
+|--------------------------------------------------------------------------
+| Get admins
+|--------------------------------------------------------------------------
+*/
+const getAdminUser = async ({
+    page = 1,
+    limit = 20,
+    search = "",
+    isActive,
+} = {}) => {
+    const currentPage = Math.max(1, Number(page) || 1);
+    const pageLimit = Math.max(1, Number(limit) || 20);
+    const skip = (currentPage - 1) * pageLimit;
+
+    const filter = {
+        role: "ADMIN",
+    };
+
+    // Status filter
+    if (isActive !== undefined && isActive !== "") {
+        filter.isActive =
+            typeof isActive === "boolean"
+                ? isActive
+                : isActive === "true";
+    }
+
+    // Search filter
+    if (search && String(search).trim()) {
+        const searchRegex = String(search).trim();
+
+        filter.$or = [
+            { name: { $regex: searchRegex, $options: "i" } },
+            { email: { $regex: searchRegex, $options: "i" } },
+            { phone: { $regex: searchRegex, $options: "i" } },
+        ];
+    }
+
+    const [users, total] = await Promise.all([
+        User.find(filter)
+            .select("-password -otp -otpExpiry -__v")
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(pageLimit)
+            .lean(),
+
+        User.countDocuments(filter),
+    ]);
+
+    return {
+        users,
+        pagination: {
+            page: currentPage,
+            limit: pageLimit,
+            total,
+            totalPages: Math.ceil(total / pageLimit),
+        },
+    };
+};
 
 const toggleCustomerStatus = async (
     customerId
@@ -325,6 +429,52 @@ const toggleCustomerStatus = async (
     };
 };
 
+const toggleAdminStatus = async (
+    customerId
+) => {
+    if (
+        !mongoose.Types.ObjectId.isValid(
+            customerId
+        )
+    ) {
+        const error = new Error(
+            "Invalid customer ID."
+        );
+
+        error.statusCode = 400;
+
+        throw error;
+    }
+
+    const customer =
+        await User.findOne({
+            _id: customerId,
+            role: "ADMIN",
+        });
+
+    if (!customer) {
+        const error = new Error(
+            "Customer not found."
+        );
+
+        error.statusCode = 404;
+
+        throw error;
+    }
+
+    customer.isActive =
+        !customer.isActive;
+
+    await customer.save();
+
+    return {
+        _id: customer._id,
+        name: customer.name,
+        email: customer.email,
+        isActive: customer.isActive,
+    };
+};
+
 /*
  * Get customer by ID.
  */
@@ -334,7 +484,7 @@ const getCustomerById = async (
     const customer =
         await User.findOne({
             _id: customerId,
-            role: "USER",
+            // role: "USER",
         })
             .select(
                 "-password -refreshToken -resetPasswordToken -resetPasswordExpires -emailVerificationToken"
@@ -363,4 +513,7 @@ module.exports = {
     getCustomerById,
     updateCustomer,
     toggleCustomerStatus,
+    toggleAdminStatus,
+    getAdminUser,
+    updateUserRole,
 };

@@ -16,6 +16,8 @@ const {
     logout,
     logoutAllDevices,
     getSessions,
+    getLoginActivity,
+    logoutSession
 } = require("../controllers/auth.controller");
 
 const {
@@ -148,6 +150,14 @@ router.get(
     getSessions
 );
 
+
+router.get(
+    "/login-activity",
+    authenticate,
+    getLoginActivity
+);
+
+
 router.post(
     "/refresh",
     authLimiter,
@@ -163,6 +173,12 @@ router.post(
     "/logout-all",
     authenticate,
     logoutAllDevices
+);
+
+router.delete(
+    "/sessions/:sessionId",
+    authenticate,
+    logoutSession
 );
 
 module.exports = router;

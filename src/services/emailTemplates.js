@@ -2368,6 +2368,7 @@ const orderReceivedTemplateAdmin = ({
     orderStatus = "PENDING",
     shippingAddress = {},
     createdAt,
+    statusSubject = "",
 }) => {
     const formattedDate = createdAt
         ? new Date(createdAt).toLocaleString("en-IN", {
@@ -3151,6 +3152,7 @@ ${BRAND_URL}
         `.trim(),
     };
 };
+
 
 module.exports = {
     verificationOTPTemplate,

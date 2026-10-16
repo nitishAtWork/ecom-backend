@@ -6,7 +6,10 @@ const {
     getCustomersController,
     getCustomerController,
     updateCustomerController,
+    updateUserRoleController,
     toggleCustomerStatusController,
+    getAdminUserController,
+    toggleAdminStatusController,
 } = require(
     "../controllers/user.controller"
 );
@@ -70,6 +73,23 @@ router.get(
     getCustomersController
 );
 
+/*
+ * Get Admin
+ *
+ * GET /users/admin/admins
+ */
+router.get(
+    "/admin/admins",
+    authenticate,
+    authorize(
+        "SUPERADMIN"
+    ),
+    validate(
+        adminListCustomersSchema
+    ),
+    getAdminUserController
+);
+
 
 /*
  * Get customer by ID.
@@ -103,6 +123,15 @@ router.patch(
 );
 
 router.patch(
+    "/admin/:id/role",
+    authenticate,
+    authorize(
+        "SUPERADMIN"
+    ),
+    updateUserRoleController
+);
+
+router.patch(
     "/admin/:id/toggle-status",
     authenticate,
     authorize(
@@ -113,6 +142,19 @@ router.patch(
         customerIdSchema
     ),
     toggleCustomerStatusController
+);
+
+router.patch(
+    "/admin/:id/toggle-admin-status",
+    authenticate,
+    authorize(
+        "ADMIN",
+        "SUPERADMIN"
+    ),
+    validate(
+        customerIdSchema
+    ),
+    toggleAdminStatusController
 );
 
 /*

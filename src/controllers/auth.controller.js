@@ -2,27 +2,27 @@ const {
     registerUser,
 
     verifyEmail:
-        verifyEmailService,
+    verifyEmailService,
 
     resendEmailVerificationOTP:
-        resendEmailVerificationOTPService,
+    resendEmailVerificationOTPService,
 
     loginUser,
 
     sendLoginOTP:
-        sendLoginOTPService,
+    sendLoginOTPService,
 
     loginWithOTP:
-        loginWithOTPService,
+    loginWithOTPService,
 
     forgotPassword:
-        forgotPasswordService,
+    forgotPasswordService,
 
     verifyPasswordResetOTP:
-        verifyPasswordResetOTPService,
+    verifyPasswordResetOTPService,
 
     resetPassword:
-        resetPasswordService,
+    resetPasswordService,
 
     refreshAccessToken,
 
@@ -31,11 +31,18 @@ const {
 
     logoutAllDevices: logoutAllDevicesService,
 
-      getActiveSessions:
-        getActiveSessionsService,
-        changePassword: changePasswordService,
+    getActiveSessions:
+    getActiveSessionsService,
+
+    getLoginActivity:
+    getLoginActivityService,
+
+    logoutSession: logoutSessionService,
+
+    changePassword: changePasswordService,
 
 } = require("../services/auth.service");
+const parseUserAgent = require("../utils/parseUserAgent");
 
 const {
     refreshTokenCookieName,
@@ -810,15 +817,28 @@ const logoutAllDevices = async (req, res, next) => {
 
 const getSessions = async (req, res, next) => {
     try {
-        const sessions =
-            await getActiveSessionsService(
-                req.user._id
-            );
+        const sessions = await getActiveSessionsService(
+            req.user._id
+        );
+
+        const formattedSessions = sessions.map((session) => {
+            const sessionData =
+                typeof session.toObject === "function"
+                    ? session.toObject()
+                    : session;
+
+            return {
+                ...sessionData,
+                deviceInfo: parseUserAgent(
+                    sessionData.userAgent
+                ),
+            };
+        });
 
         return res.status(200).json({
             success: true,
             data: {
-                sessions,
+                sessions: formattedSessions,
             },
         });
     } catch (error) {
@@ -845,6 +865,45 @@ const changePassword = async (req, res, next) => {
     }
 };
 
+const getLoginActivity = async (req, res, next) => {
+    try {
+        const userId = req.user.id || req.user._id;
+
+        const sessions = await getLoginActivityService(userId);
+
+        const formattedSessions = sessions.map((session) => ({
+            ...session,
+            deviceInfo: parseUserAgent(session.userAgent),
+        }));
+
+        return res.status(200).json({
+            success: true,
+            sessions: formattedSessions,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+const logoutSession = async (req, res, next) => {
+    try {
+        const userId = req.user.id || req.user._id;
+        const { sessionId } = req.params;
+
+        await logoutSessionService({
+            userId,
+            sessionId,
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: "Session logged out successfully.",
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
 module.exports = {
     register,
     verifyEmail,
@@ -861,4 +920,6 @@ module.exports = {
     logout,
     logoutAllDevices,
     getSessions,
+    getLoginActivity,
+    logoutSession,
 };
